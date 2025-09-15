@@ -26,28 +26,12 @@ FROM node:20 AS runner
 
 WORKDIR /app
 
-# Install dependencies
-RUN apt-get update && apt-get install -y python3 ffmpeg && rm -rf /var/lib/apt/lists/*
+# Install runtime dependencies including tini for signal handling
+RUN apt-get update && apt-get install -y python3 ffmpeg tini && rm -rf /var/lib/apt/lists/*
 
-# Set environment to production
-ENV NODE_ENV=production
-
-# Copy necessary files from the builder stage
-COPY --from=builder /app/tsconfig.json ./tsconfig.json
-COPY --from=builder /app/package.json ./package.json
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/sources ./sources
-
-# Expose the port the app will run on
-EXPOSE 3000
-
-# Command to run the application
-CMD ["yarn", "start"] 
-WORKDIR /app
-
-# Create non-root user
-RUN addgroup -g 1001 -S nodejs && \
-    adduser -S nodejs -u 1001
+# Create non-root user (using Debian/Ubuntu syntax)
+RUN groupadd -g 1001 nodejs && \
+    useradd -m -u 1001 -g nodejs nodejs
 
 # Set environment to production
 ENV NODE_ENV=production
