@@ -1,40 +1,48 @@
-# Multi-stage build for happy-server
 # Stage 1: Building the application
-FROM node:20-alpine AS builder
+FROM node:20 AS builder
 
-# Install build dependencies
-RUN apk add --no-cache python3 make g++ git
+# Install dependencies
+RUN apt-get update && apt-get install -y python3 ffmpeg make g++ build-essential && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-# Copy package files
+# Copy package.json and yarn.lock
 COPY package.json yarn.lock ./
 COPY ./prisma ./prisma
 
 # Install dependencies
 RUN yarn install --frozen-lockfile --ignore-engines
 
-# Generate Prisma client
-RUN yarn generate
-
 # Copy the rest of the application code
 COPY ./tsconfig.json ./tsconfig.json
 COPY ./vitest.config.ts ./vitest.config.ts
 COPY ./sources ./sources
 
-# Build TypeScript application
+# Build the Next.js application
 RUN yarn build
 
 # Stage 2: Runtime
-FROM node:20-alpine AS runner
+FROM node:20 AS runner
 
-# Install runtime dependencies including tini for proper signal handling
-RUN apk add --no-cache \
-    ffmpeg \
-    python3 \
-    py3-pip \
-    tini
+WORKDIR /app
 
+# Install dependencies
+RUN apt-get update && apt-get install -y python3 ffmpeg && rm -rf /var/lib/apt/lists/*
+
+# Set environment to production
+ENV NODE_ENV=production
+
+# Copy necessary files from the builder stage
+COPY --from=builder /app/tsconfig.json ./tsconfig.json
+COPY --from=builder /app/package.json ./package.json
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/sources ./sources
+
+# Expose the port the app will run on
+EXPOSE 3000
+
+# Command to run the application
+CMD ["yarn", "start"] 
 WORKDIR /app
 
 # Create non-root user
