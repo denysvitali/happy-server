@@ -26,42 +26,20 @@ FROM node:20 AS runner
 
 WORKDIR /app
 
-# Install runtime dependencies including tini for signal handling
-RUN apt-get update && apt-get install -y python3 ffmpeg tini && rm -rf /var/lib/apt/lists/*
-
-# Create non-root user (using Debian/Ubuntu syntax)
-RUN groupadd -g 1001 nodejs && \
-    useradd -m -u 1001 -g nodejs nodejs
+# Install dependencies
+RUN apt-get update && apt-get install -y python3 ffmpeg && rm -rf /var/lib/apt/lists/*
 
 # Set environment to production
 ENV NODE_ENV=production
 
-# Copy package files and prisma schema (needed for postinstall)
-COPY --chown=nodejs:nodejs package.json yarn.lock ./
-COPY --chown=nodejs:nodejs ./prisma ./prisma
-
-# Install production dependencies only
-# Sharp requires platform-specific binaries, so we need to ensure it installs correctly
-RUN yarn install --production --frozen-lockfile --ignore-engines --network-timeout 100000 && \
-    yarn cache clean
-
 # Copy necessary files from the builder stage
-COPY --from=builder --chown=nodejs:nodejs /app/node_modules/.prisma ./node_modules/.prisma
-COPY --from=builder --chown=nodejs:nodejs /app/tsconfig.json ./tsconfig.json
-COPY --from=builder --chown=nodejs:nodejs /app/sources ./sources
-
-# Switch to non-root user
-USER nodejs
+COPY --from=builder /app/tsconfig.json ./tsconfig.json
+COPY --from=builder /app/package.json ./package.json
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/sources ./sources
 
 # Expose the port the app will run on
 EXPOSE 3000
-
-# Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD node -e "require('http').get('http://localhost:3000/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"
-
-# Use tini to handle signals properly
-ENTRYPOINT ["/sbin/tini", "--"]
 
 # Command to run the application
 CMD ["yarn", "start"] 
