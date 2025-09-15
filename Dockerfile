@@ -36,18 +36,19 @@ RUN groupadd -g 1001 nodejs && \
 # Set environment to production
 ENV NODE_ENV=production
 
-# Copy package files
-COPY package.json yarn.lock ./
+# Copy package files and prisma schema (needed for postinstall)
+COPY --chown=nodejs:nodejs package.json yarn.lock ./
+COPY --chown=nodejs:nodejs ./prisma ./prisma
 
 # Install production dependencies only
-RUN yarn install --production --frozen-lockfile --ignore-engines && \
+# Sharp requires platform-specific binaries, so we need to ensure it installs correctly
+RUN yarn install --production --frozen-lockfile --ignore-engines --network-timeout 100000 && \
     yarn cache clean
 
 # Copy necessary files from the builder stage
 COPY --from=builder --chown=nodejs:nodejs /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder --chown=nodejs:nodejs /app/tsconfig.json ./tsconfig.json
 COPY --from=builder --chown=nodejs:nodejs /app/sources ./sources
-COPY --from=builder --chown=nodejs:nodejs /app/prisma ./prisma
 
 # Switch to non-root user
 USER nodejs
